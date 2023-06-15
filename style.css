@@ -7,9 +7,16 @@
     line-height: 20px;
     cursor: pointer;
   }
+
   .miss {
     background-color: blue;
-  }
-  .hit {
+}
+.hit {
+    background-color: orange;
+}
+.sunk {
     background-color: red;
-  }
+}
+.ship {
+    background-color: grey;
+}
