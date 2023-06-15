@@ -1,17 +1,23 @@
-// battleship.js
-
-let boardElement = document.getElementById('board');
+let playerBoardElement = document.getElementById('player-board');
+let computerBoardElement = document.getElementById('computer-board');
 let messageElement = document.getElementById('message');
 
-let board = Array(10).fill().map(() => Array(10).fill('O'));  // 10x10 board
+let playerBoard = Array(10).fill().map(() => Array(10).fill('O'));  // 10x10 board
+let computerBoard = Array(10).fill().map(() => Array(10).fill('O'));  // 10x10 board
 let shipSizes = [1, 2, 2, 3, 4, 5];
-let ships = [];
+let playerShips = [];
+let computerShips = [];
 
-shipSizes.forEach(placeShip);
-renderBoard();
+shipSizes.forEach(size => placeShip(size, playerBoard, playerShips));
+shipSizes.forEach(size => placeShip(size, computerBoard, computerShips));
+renderBoard(playerBoard, playerBoardElement, cellClick);
+renderBoard(computerBoard, computerBoardElement, null); 
 
-function placeShip(size) {
-    let positions = getValidPositions(size);
+
+
+
+function placeShip(size, board, ships) {
+    let positions = getValidPositions(size, board);
     if (positions.length === 0) {
         throw new Error(`Unable to place ship of size ${size}`);
     }
@@ -26,22 +32,23 @@ function placeShip(size) {
     ships.push({ row, col, size, direction, hits: 0 });
 }
 
-function getValidPositions(size) {
+
+function getValidPositions(size, board) {
     let positions = [];
     for (let direction of ['horizontal', 'vertical']) {
-        let maxRow = direction === 'horizontal' ? 10 : 10 - size;
-        let maxCol = direction === 'horizontal' ? 10 - size : 10;
+        let maxRow = direction === 'horizontal' ? 10 : 10 - size + 1;
+        let maxCol = direction === 'horizontal' ? 10 - size + 1 : 10;
         for (let row = 0; row < maxRow; row++) {
             for (let col = 0; col < maxCol; col++) {
                 let vacant = true;
                 for (let i = 0; i < size; i++) {
                     if (direction === 'horizontal') {
-                        if (!cellIsVacant(row, col + i)) {
+                        if (col + i < 10 && !cellIsVacant(row, col + i, board)) {
                             vacant = false;
                             break;
                         }
                     } else {  // 'vertical'
-                        if (!cellIsVacant(row + i, col)) {
+                        if (row + i < 10 && !cellIsVacant(row + i, col, board)) { 
                             vacant = false;
                             break;
                         }
@@ -56,10 +63,8 @@ function getValidPositions(size) {
     return positions;
 }
 
-// cellIsVacant function remains the same
 
-
-function cellIsVacant(row, col) {
+function cellIsVacant(row, col, board) {
     for (let i = Math.max(0, row - 1); i <= Math.min(9, row + 1); i++) {
         for (let j = Math.max(0, col - 1); j <= Math.min(9, col + 1); j++) {
             if (board[i][j] !== 'O') {
@@ -71,32 +76,40 @@ function cellIsVacant(row, col) {
 }
 
 
-shipSizes.forEach(placeShip);
-
-
-function renderBoard() {
-    boardElement.innerHTML = '';  // Clear existing board
+function renderBoard(board, boardElement, clickHandler) {
+    boardElement.innerHTML = ''; // Clear existing board
     for (let i = 0; i < 10; i++) {
-        let rowElement = document.createElement('tr');
-        for (let j = 0; j < 10; j++) {
-            let cellElement = document.createElement('td');
-            cellElement.textContent = board[i][j];
-            cellElement.className = 'cell';
-            cellElement.dataset.row = i;
-            cellElement.dataset.col = j;
-            if (board[i][j] === 'S') {
-                cellElement.classList.add('ship');
-            }
-            cellElement.addEventListener('click', cellClick, false);
-            rowElement.appendChild(cellElement);
+      let rowElement = document.createElement('tr');
+      for (let j = 0; j < 10; j++) {
+        let cellElement = document.createElement('td');
+        let cellContent = board[i][j];
+        cellElement.textContent = cellContent;
+        cellElement.className = 'cell';
+        cellElement.dataset.row = i;
+        cellElement.dataset.col = j;
+        if (cellContent === 'S') {
+          cellElement.style.backgroundColor = 'blue';
+        } else if (cellContent === 'X') {
+          cellElement.style.backgroundColor = 'red';
+        } else if (cellContent === 'M') {
+          cellElement.style.backgroundColor = 'lightblue';
+        } else if (cellContent === 'D') {
+          cellElement.style.backgroundColor = 'orange';
+        } else if (cellContent === 'W') {
+          cellElement.style.backgroundColor = 'red';
+          cellElement.style.color = 'white';
         }
-        boardElement.appendChild(rowElement);
+        if (clickHandler) {
+          cellElement.addEventListener('click', clickHandler, false);
+        }
+        rowElement.appendChild(cellElement);
+      }
+      boardElement.appendChild(rowElement);
     }
-}
+  }
+  
 
-function cellClick(e) {
-    let row = parseInt(e.target.dataset.row, 10);
-    let col = parseInt(e.target.dataset.col, 10);
+function processTurn(row, col, board, ships, target) {
     if (board[row][col] === 'S') {
         // Hit! Check which ship is hit
         let ship = ships.find(ship => {
@@ -107,29 +120,36 @@ function cellClick(e) {
             }
         });
         ship.hits++;
-        e.target.classList.remove('ship');
-        e.target.classList.add('hit');
+        board[row][col] = 'X';  // Hit
         if (ship.hits === ship.size) {
             // The ship is sunk
-            messageElement.textContent = 'You sank my battleship!';
-            for (let i = 0; i < ship.size; i++) {
-                let cellElement;
-                if (ship.direction === 'horizontal') {
-                    cellElement = boardElement.children[ship.row].children[ship.col + i];
-                } else {
-                    cellElement = boardElement.children[ship.row + i].children[ship.col];
-                }
-                cellElement.classList.remove('hit');
-                cellElement.classList.add('sunk');
-            }
+            messageElement.textContent = `You sank ${target}'s battleship!`;
         } else {
             // The ship is hit but not sunk
-            messageElement.textContent = 'Hit!';
+            messageElement.textContent = `Hit on ${target}'s ship!`;
         }
     } else {
         // Miss
-        e.target.classList.add('miss');
-        messageElement.textContent = 'Miss!';
+        board[row][col] = 'M';  // Miss
+        messageElement.textContent = `Miss on ${target}'s board!`;
     }
-    e.target.removeEventListener('click', cellClick, false);
 }
+
+function cellClick(e) {
+    let row = parseInt(e.target.dataset.row, 10);
+    let col = parseInt(e.target.dataset.col, 10);
+    // Player's turn
+    processTurn(row, col, computerBoard, computerShips, 'computer');
+    // Computer's turn
+    while (true) {
+        let row = Math.floor(Math.random() * 10);
+        let col = Math.floor(Math.random() * 10);
+        if (playerBoard[row][col] !== 'X' && playerBoard[row][col] !== 'M') {  // Don't hit the same cell twice
+            processTurn(row, col, playerBoard, playerShips, 'player');
+            break;
+        }
+    }
+    renderBoard(playerBoard, playerBoardElement, null);
+    renderBoard(computerBoard, computerBoardElement, cellClick);
+}
+
