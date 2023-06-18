@@ -8,11 +8,13 @@ let shipSizes = [1, 2, 2, 3, 4, 5];
 let playerShips = [];
 let computerShips = [];
 
-shipSizes.forEach(size => placeShip(size, playerBoard, playerShips));
-shipSizes.forEach(size => placeShip(size, computerBoard, computerShips));
-renderBoard(playerBoard, playerBoardElement, cellClick);
-renderBoard(computerBoard, computerBoardElement, null); 
-
+let cellClickHandlers = [];
+window.onload = function() {
+    shipSizes.forEach(size => placeShip(size, playerBoard, playerShips));
+    shipSizes.forEach(size => placeShip(size, computerBoard, computerShips));
+    renderBoard(playerBoard, playerBoardElement, null); 
+    renderBoard(computerBoard, computerBoardElement, cellClick, cellClickHandlers);
+}
 
 
 
@@ -75,43 +77,50 @@ function cellIsVacant(row, col, board) {
     return true;
 }
 
-
-function renderBoard(board, boardElement, clickHandler) {
+function renderBoard(board, boardElement, clickHandler, handlers) {
     boardElement.innerHTML = ''; // Clear existing board
     for (let i = 0; i < 10; i++) {
-      let rowElement = document.createElement('tr');
-      for (let j = 0; j < 10; j++) {
-        let cellElement = document.createElement('td');
-        let cellContent = board[i][j];
-        cellElement.textContent = cellContent;
-        cellElement.className = 'cell';
-        cellElement.dataset.row = i;
-        cellElement.dataset.col = j;
-        if (cellContent === 'S') {
-          cellElement.style.backgroundColor = 'blue';
-        } else if (cellContent === 'X') {
-          cellElement.style.backgroundColor = 'red';
-        } else if (cellContent === 'M') {
-          cellElement.style.backgroundColor = 'lightblue';
-        } else if (cellContent === 'D') {
-          cellElement.style.backgroundColor = 'orange';
-        } else if (cellContent === 'W') {
-          cellElement.style.backgroundColor = 'red';
-          cellElement.style.color = 'white';
+        let rowElement = document.createElement('tr');
+        for (let j = 0; j < 10; j++) {
+            let cellElement = document.createElement('td');
+            let cellContent = board[i][j];
+            cellElement.textContent = cellContent;
+            cellElement.className = 'cell';
+            cellElement.dataset.row = i;
+            cellElement.dataset.col = j;
+            if (cellContent === 'S') {
+                cellElement.style.backgroundColor = 'blue';
+            } else if (cellContent === 'X') {
+                cellElement.style.backgroundColor = 'red';
+            } else if (cellContent === 'M') {
+                cellElement.style.backgroundColor = 'lightblue';
+            } else if (cellContent === 'D') {
+                cellElement.style.backgroundColor = 'orange';
+            } else if (cellContent === 'W') {
+                cellElement.style.backgroundColor = 'red';
+                cellElement.style.color = 'white';
+            }
+            if (clickHandler) {
+                let wrapperHandler = function(e) {
+                    clickHandler(e);
+                };
+                cellElement.addEventListener('click', wrapperHandler);
+                cellElement.clickHandler = wrapperHandler; // Add clickHandler to cell object
+                if (handlers) {
+                    handlers.push({element: cellElement, handler: wrapperHandler});
+                }
+            }
+            rowElement.appendChild(cellElement);
         }
-        if (clickHandler) {
-          cellElement.addEventListener('click', clickHandler, false);
-        }
-        rowElement.appendChild(cellElement);
-      }
-      boardElement.appendChild(rowElement);
+        boardElement.appendChild(rowElement);
     }
-  }
+}
+
+
   
 
-function processTurn(row, col, board, ships, target) {
+  function processTurn(row, col, board, ships, target, clickHandler) {
     if (board[row][col] === 'S') {
-        // Hit! Check which ship is hit
         let ship = ships.find(ship => {
             if (ship.direction === 'horizontal') {
                 return ship.row === row && ship.col <= col && ship.col + ship.size > col;
@@ -120,36 +129,56 @@ function processTurn(row, col, board, ships, target) {
             }
         });
         ship.hits++;
-        board[row][col] = 'X';  // Hit
+        board[row][col] = 'X';
         if (ship.hits === ship.size) {
-            // The ship is sunk
             messageElement.textContent = `You sank ${target}'s battleship!`;
         } else {
-            // The ship is hit but not sunk
             messageElement.textContent = `Hit on ${target}'s ship!`;
         }
     } else {
-        // Miss
-        board[row][col] = 'M';  // Miss
+        board[row][col] = 'M';
         messageElement.textContent = `Miss on ${target}'s board!`;
     }
 }
 
+
 function cellClick(e) {
     let row = parseInt(e.target.dataset.row, 10);
     let col = parseInt(e.target.dataset.col, 10);
-    // Player's turn
-    processTurn(row, col, computerBoard, computerShips, 'computer');
-    // Computer's turn
+    processTurn(row, col, computerBoard, computerShips, 'computer', cellClick);
+    // Only allow computer's turn if the game is not over
+    if (!checkGameOver(computerShips, 'computer', cellClick)) {
+        computerTurn();
+    }
+    renderBoard(playerBoard, playerBoardElement, null);
+    renderBoard(computerBoard, computerBoardElement, cellClick, cellClickHandlers);
+    // Disable click event for the clicked cell
+    e.target.removeEventListener('click', e.target.clickHandler);
+}
+
+
+
+function checkGameOver(ships, playerName) {
+    let allShipsSunk = ships.every(ship => ship.hits === ship.size);
+    if (allShipsSunk) {
+        messageElement.textContent = `${playerName} has lost. Game Over!`;
+        // If game is over, remove click event listener from the computer's board
+        cellClickHandlers.forEach(({element, handler}) => {
+            element.removeEventListener('click', handler);
+        });
+        cellClickHandlers = []; // Clear out the handlers
+    }
+    return allShipsSunk;
+}
+
+
+function computerTurn() {
     while (true) {
         let row = Math.floor(Math.random() * 10);
         let col = Math.floor(Math.random() * 10);
-        if (playerBoard[row][col] !== 'X' && playerBoard[row][col] !== 'M') {  // Don't hit the same cell twice
-            processTurn(row, col, playerBoard, playerShips, 'player');
+        if (playerBoard[row][col] !== 'X' && playerBoard[row][col] !== 'M') {
+            processTurn(row, col, playerBoard, playerShips, 'player', cellClick);
             break;
         }
     }
-    renderBoard(playerBoard, playerBoardElement, null);
-    renderBoard(computerBoard, computerBoardElement, cellClick);
 }
-
